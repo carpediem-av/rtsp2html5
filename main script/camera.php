@@ -1,34 +1,62 @@
 <?php
-//Copyright (c) 2020-2021 Carpe Diem Software Developing by Alex Versetty.
-//http://carpediem.0fees.us/
+// Copyright (c) 2020-2021 Carpe Diem Software Developing by Alex Versetty.
+// http://carpediem.0fees.us/
+// License: MIT
 
-//Программа получает ссылку на камеру и выводит видео, при необходимости - делает перекодировку через ffmpeg.
+//Программа получает ссылку на камеру и отображает видео/фото, при необходимости - делает перекодировку через ffmpeg.
+//The program receives a link to the camera and displays video/photo. If necessary, makes a transcoding via ffmpeg.
 
-// Формат запроса видео: camera.php?b=[ключ]&a=[ссылка rtsp в base64]&c=[ссылка второго потока rtsp в base64]
-// Формат запроса картинки: camera.php?b=[ключ]&a=[ссылка rtsp в base64]&c=[ссылка второго потока rtsp в base64]&get=jpeg
-// или картинка в полном размере: camera.php?b=[ключ]&a=[ссылка rtsp в base64]&c=[ссылка второго потока rtsp в base64]&get=jpeg-hq
-// Параметр "с" везде необязательный.
-// Примечание к ffmpeg - probesize 32  может дать нереальный траффик, если не указывать rate!
+// Формат запроса видео: camera.php?b={ключ}&a={ссылка rtsp в base64}&c={ссылка второго потока rtsp в base64}
+// Формат запроса фото: camera.php?b={ключ}&a={ссылка rtsp в base64}&c={ссылка второго потока rtsp в base64}&get=jpeg
+// Фото в полном размере: camera.php?b={ключ}&a={ссылка rtsp в base64}&c={ссылка второго потока rtsp в base64}&get=jpeg-hq
+// Параметр "с" необязательный
 
-//////////////////////// КОНСТАНТЫ //////////////////////////////////
-$key = "ПРИДУМАЙТЕ_ДЛИННЫЙ_КЛЮЧ_ИЗ_ЛАТИНИЦЫ_И_ЦИФР";
-$duration_limit = 600; //ограничение на просмотр, секунд (потом картинка остановится)
-$def_rate = 6;	//кадров в секунду, если нужно перекодирование
-$jpeg_params = "-s 260x148 -q:v 5";  //параметры кодирования картинки
-$mjpeg_params = "-b:v 512k -s 426x240 -r 2";  //параметры кодирования mjpeg
-$redirectToIfBackground = 'http://САЙТИК'; //сайт для переадресации на него, если мы в фоновой вкладке (экономия трафика)
-/////////////////////////////////////////////////////////////////////
+// Video request format: camera.php?b={key}&a={base64-coded rtsp uri}&c={base64-coded rtsp 2nd stream uri}
+// Still image request format: camera.php?b={key}&a={base64-coded rtsp uri}&c={base64-coded rtsp 2nd stream uri}&get=jpeg
+// Full size still image: camera.php?b={key}&a={base64-coded rtsp uri}&c={base64-coded rtsp 2nd stream uri}&get=jpeg-hq
+// The "c" parameter is optional
 
-function get_server_memory_usage(){
+//////////////////////// КОНФИГУРАЦИЯ / CONFIGURATION ////////////////////////////////////////////////////////////////////////////////
+$key = "замените своим / replace by your";				//ключ безопасности
+														//security key
+$duration_limit = 600; 									//ограничение на просмотр, секунд (потом картинка остановится)
+														//limit duration of video streaming, seconds
+$jpeg_quality = 5;  									//для jpeg: качество
+$jpeg_resolution = "360x202";  							//для jpeg: разрешение
+$jpeg_cachetime = 60;  									//для jpeg: время хранения кадра в кэше браузера, секунд
+														//jpeg: limit duration of thumbnail browser caching
+$webm_ogv_fps = 6; 										//для webm & ogv: кадров в секунду
+$webm_ogv_bitrate = "512k"; 							//для webm & ogv: битрейт
+$webm_ogv_resolution = "640x360"; 						//для webm & ogv: разрешение
+$mjpeg_fps = 6; 										//для mjpeg: кадров в секунду
+$mjpeg_bitrate = "1200k"; 								//для mjpeg: битрейт
+$mjpeg_resolution = "640x360"; 							//для mjpeg: разрешение
+$redirectToIfBackground = 'http://';			 		//сайт для переадресации на него, если мы в фоновой вкладке (экономия трафика)
+														//redirect to this url if tab running background (for trafic saving)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+function getRAMUsage() {
     $free = shell_exec('free');
-    $free = (string)trim($free);
+    $free = (string) trim($free);
     $free_arr = explode("\n", $free);
     $mem = explode(" ", $free_arr[1]);
     $mem = array_filter($mem);
     $mem = array_merge($mem);
-    $memory_usage = $mem[2]/$mem[1]*100;
+    $memory_usage = $mem[2] / $mem[1] * 100;
     return $memory_usage;
+}
+
+function disableBrowserCaching()
+{
+	header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+	header("Cache-Control: post-check=0, pre-check=0", false);
+	header("Pragma: no-cache");
+}
+
+function passthruErrorImg()
+{
+	$errorjpeg = file_get_contents('error_thumb.png');
+	echo $errorjpeg;
 }
 
 // запрет доступа без указания ключа
@@ -38,70 +66,60 @@ if (!isset($_REQUEST["b"]) || $_REQUEST["b"] !== $key) {
 }
 
 if (isset($_REQUEST["get"])) {
-	header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-	header("Cache-Control: post-check=0, pre-check=0", false);
-	header("Pragma: no-cache");
 	header('Accept-Ranges:bytes');
 	header('Connection:keep-alive');
 
 	$rtsp = str_replace("'", '', str_replace("\"", '', base64_decode($_REQUEST["a"])));
-	if (substr( $rtsp, 0, 7 ) !== "rtsp://") die();
+	if (substr($rtsp, 0, 7) !== "rtsp://") die();
 	$ffmpeg_base = "ffmpeg -rtsp_transport tcp -probesize 32 -stimeout 5000000 -i \"{$rtsp}\" -loglevel quiet";
+	
 	if (isset($_REQUEST["c"])) {
 		$rtsp_lq = str_replace("'", '', str_replace("\"", '', base64_decode($_REQUEST["c"])));
-		if (substr( $rtsp_lq, 0, 7 ) !== "rtsp://") die();
+		if (substr($rtsp_lq, 0, 7) !== "rtsp://") die();
 		$ffmpeg_base_lq = "ffmpeg -rtsp_transport tcp -probesize 32 -stimeout 5000000 -i \"{$rtsp_lq}\" -loglevel quiet";
 	}
 	else {
 		$ffmpeg_base_lq = $ffmpeg_base;
 	}
-		
-	if ($_REQUEST["get"] == "jpeg") {
-		header('Content-type: image/jpeg');
-		if (get_server_memory_usage() > 80) {
-			$errorjpeg = file_get_contents('error_thumb.png');
-			echo $errorjpeg;
-		}
-		else {
-			passthru("{$ffmpeg_base_lq} -vframes 1 {$jpeg_params} -f singlejpeg pipe:");
-		}
-	}
-	
-	if ($_REQUEST["get"] == "jpeg-hq") {
-		header('Content-type: image/jpeg');
-		if (get_server_memory_usage() > 80) {
-			$errorjpeg = file_get_contents('error_thumb.png');
-			echo $errorjpeg;
-		}
-		else {
-			passthru("{$ffmpeg_base} -vframes 1 -f singlejpeg pipe:");
-		}
-	}
-			
-	if ($_REQUEST["get"] == "mjpeg") {
-		header('Content-type: multipart/x-mixed-replace;boundary=ffserver');
-		passthru("{$ffmpeg_base_lq} -t {$duration_limit} {$mjpeg_params} -f mpjpeg pipe:");
-	}
-				
-	if ($_REQUEST["get"] == "mp4") {
-		header('Content-type: video/mp4');
-		$movflags = "-movflags +frag_keyframe+separate_moof+omit_tfhd_offset+empty_moov";
-		passthru("{$ffmpeg_base} -t {$duration_limit} -c copy -an {$movflags} -f mp4 pipe:");
-	}
 
-	if ($_REQUEST["get"] == "webm") {
-		header('Content-type: video/webm');
-		passthru("{$ffmpeg_base_lq} -t {$duration_limit} -c:v vp8 -b:v 256k -an -s 426x240 -r {$def_rate} -f webm pipe:");
-	}
-
-	if ($_REQUEST["get"] == "ogv") {
-		header('Content-type: video/ogg');
-		passthru("{$ffmpeg_base_lq} -t {$duration_limit} -c:v libtheora -b:v 256k -an -s 426x240 -r {$def_rate} -f ogg pipe:");
+	switch ($_REQUEST["get"]) {
+		case "jpeg":
+			header("Cache-Control: public, max-age=60");
+			header('Content-type: image/jpeg');
+			if (getRAMUsage() > 80) passthruErrorImg();
+			else passthru("{$ffmpeg_base_lq} -vframes 1 -s {$jpeg_resolution} -q:v {$jpeg_quality} -f singlejpeg pipe:");
+			break;
+		case "jpeg-hq":
+			header("Cache-Control: public, max-age=60");
+			header('Content-type: image/jpeg');
+			if (getRAMUsage() > 80) passthruErrorImg();
+			else passthru("{$ffmpeg_base} -vframes 1 -q:v {$jpeg_quality} -f singlejpeg pipe:");
+			break;
+		case "mjpeg":
+			disableBrowserCaching();
+			header('Content-type: multipart/x-mixed-replace;boundary=ffserver');
+			passthru("{$ffmpeg_base_lq} -t {$duration_limit} -b:v {$mjpeg_bitrate} -s {$mjpeg_resolution} -r {$mjpeg_fps} -f mpjpeg pipe:");
+			break;
+		case "mp4":
+			disableBrowserCaching();
+			header('Content-type: video/mp4');
+			passthru("{$ffmpeg_base} -t {$duration_limit} -c copy -an -movflags empty_moov+omit_tfhd_offset+frag_keyframe+default_base_moof -f mp4 pipe:");
+			break;
+		case "webm":
+			disableBrowserCaching();
+			header('Content-type: video/webm');
+			passthru("{$ffmpeg_base_lq} -t {$duration_limit} -c:v vp8 -b:v {$webm_ogv_bitrate} -an -s {$webm_ogv_resolution} -r {$webm_ogv_fps} -f webm pipe:");
+			break;
+		case "ogv":
+			disableBrowserCaching();
+			header('Content-type: video/ogg');
+			passthru("{$ffmpeg_base_lq} -t {$duration_limit} -c:v libtheora -b:v {$webm_ogv_bitrate} -an -s {$webm_ogv_resolution} -r {$webm_ogv_fps} -f ogg pipe:");			
+			break;
 	}
 }
 else {
 	$rtsp_url = urlencode($_REQUEST["a"]);
-	$rtsp_lq_url = urlencode($_REQUEST["c"]);
+	$rtsp_lq_url = isset($_REQUEST["c"]) ? urlencode($_REQUEST["c"]) : $rtsp_url;
 	$time = time();
 	echo <<<HTMLMARKER
 <html>
@@ -110,68 +128,100 @@ else {
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<title>Видеонаблюдение</title>
 		<script src="ifvisible.js"></script>
+		<style>
+			body { 
+				background-color: black;
+				padding: 0; margin: 0; 
+			}
+			
+			#blackbox { 
+				max-width: 100%; width: 100%; height: 100%; 
+				color: white; background-color: black; 
+				text-align: center; 
+				font-size: 50px; line-height: 200px; 
+				position: absolute; 
+				z-index: 5; 
+				top: 0px; left: 0px; right: 0px; bottom: 0px; 
+				margin: auto;
+			}
+			
+			#mjpegbox {
+				max-width: 100%; height: 100%; 
+				position: absolute; 
+				z-index: 10; 
+				top: 0px; left: 0px; right: 0px; bottom: 0px; 
+				margin: auto;
+			}
+			
+			#videobox {
+				max-width: 100%; 
+				position: absolute; 
+				z-index: 1; 
+				height: 100%; 
+				top: 0px; left: 0px; right: 0px; bottom: 0px; 
+				margin: auto;
+			}
+		</style>
 	</head>
-	<body style="background-color:black;padding:0;margin:0;">
-		<div id="blackbox" style="max-width: 100%; color: white; text-align: center; line-height: 200px; font-size: 50px; background-color: black; position: absolute; z-index: 5; width: 100%; height: 100%; top: 0px; left: 0px; right: 0px; bottom: 0px; margin: auto;">Загрузка...</div>
-		<div id="errorbox" style="max-width: 100%; display: none; text-shadow: 1px 1px 2px black, 0 0 3px black; color: red; text-align: center; font-size: 20px; background-color: none; position: absolute; z-index: 100; width: 100%; height: 100%; top: 0px; left: 0px; right: 0px; bottom: 0px; margin: auto;"><br />Ваш браузер не может воспроизвести это видео в максимальном качестве. Рекомендуются браузеры Google Chrome или Mozilla Firefox!</div>
-		<img id="mjpegbox" src="?get=mjpeg&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}" style="max-width: 100%; position: absolute; z-index: 10; height: 100%; top: 0px; left: 0px; right: 0px; bottom: 0px; margin: auto;" />
-		<video muted preload="auto" id="videobox" onerror="videobox_onerror()" oncanplay="videobox_oncanplay()" style="max-width: 100%; position: absolute; z-index: 1; height: 100%; top: 0px; left: 0px; right: 0px; bottom: 0px; margin: auto;">
+	<body>
+		<div id="blackbox">Загрузка...</div>
+		<img id="mjpegbox" src="?get=mjpeg&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}" />
+		<video muted preload="auto" id="videobox" onerror="videobox_onerror()" oncanplay="videobox_oncanplay()">
 			<source src="?get=mp4&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}&time={$time}" type="video/mp4">
-			<source src="?get=webm&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}&time={$time}" type="video/webm">-->
-			<source src="?get=ogv&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}&time={$time}" type="video/ogg">-->
-			Browser is not support HTML5 video!
+			<source src="?get=webm&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}&time={$time}" type="video/webm">
+			<source src="?get=ogv&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}&time={$time}" type="video/ogg">
+			Ваш браузер не поддерживает HTML5 video!
 		</video>
 		<script type="text/javascript">
-			if(!ifvisible.now()){
+			if (!ifvisible.now()){
 				window.location.href = "{$redirectToIfBackground}";
 			}
 			
+			var vid = document.getElementById('videobox');
+			var mjpegbox = document.getElementById('mjpegbox');
+			var blackbox = document.getElementById('blackbox');
 			var mjpegboxDummy = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEAAAAALAAAAAABAAEAAAI=;';
 			var videoStarted = false;
+			var videoCheckCount = 0;
+			var checkVideoOK = null;
 			
 			function videobox_oncanplay() {
-				var i = setInterval(function() {
-					var vid = document.getElementById('videobox');
+				if (videoStarted) return;
+				var i = setTimeout(function() {
 					vid.play(); 
 					videoStarted = true;
-					if (!vid.paused) {
-						var mjpegbox = document.getElementById('mjpegbox');
-						var blackbox = document.getElementById('blackbox');
-						mjpegbox.src = mjpegboxDummy;
-						mjpegbox.style.display = 'none';
-						blackbox.style.display = 'none';
-					}
-					clearInterval(i);
+					mjpegbox.src = mjpegboxDummy;
+					mjpegbox.style.display = 'none';
+					blackbox.style.display = 'none';
 				}, 5000);
 			}
 			
 			function videobox_onerror() {
-				var mjpegbox = document.getElementById('mjpegbox');
-				var blackbox = document.getElementById('blackbox');
-				if (mjpegbox.src == mjpegboxDummy) {
-					mjpegbox.src = '?get=mjpeg&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}';
-				}
+				clearInterval(checkVideoOK);
+				if (mjpegbox.src == mjpegboxDummy) mjpegbox.src = '?get=mjpeg&b={$key}&a={$rtsp_url}&c={$rtsp_lq_url}';
 				mjpegbox.style.display = 'inline';
 				blackbox.style.display = 'inline';
-				errorbox.style.display = 'inline';
+				alert('Не удалось воспроизвести это видео в максимальном качестве. Возможные причины: нестабильная сеть (в т.ч. со стороны камеры), неподдерживаемый браузер');
 			}			
 			
-			var checkVideoOK_stage1 = setInterval(function() {
-				var vid = document.getElementById('videobox');
+			checkVideoOK = setInterval(function() {
 				if (videoStarted && (vid.paused || vid.ended)) {
+					videoCheckCount++;
+					if (!vid.ended) vid.play();
+				}
+				else {
+					videoCheckCount = 0;
+				}
+				
+				if (videoCheckCount > 4) {
 					videobox_onerror();
-					clearInterval(checkVideoOK_stage1);
+					clearInterval(checkVideoOK);
 				}
 			}, 2000);
-				
-			var checkVideoOK_stage2 = setInterval(function() {
-					clearInterval(checkVideoOK_stage1);
-					clearInterval(checkVideoOK_stage2);
-					var vid = document.getElementById('videobox');
-					if (vid.paused || vid.ended) {
-						videobox_onerror();
-					}
-			}, 30000);
+			
+			setTimeout(function() {
+				clearInterval(checkVideoOK);
+			}, 35000);
 		</script>
 	</body>
 </html>

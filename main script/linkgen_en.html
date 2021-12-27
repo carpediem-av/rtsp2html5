@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru_RU">
+<head>
+	<style>
+		body { padding: 0px; margin: 50px; }
+		input { width: 500px; }
+		#gen { width: 508px; height: 38px; }
+	</style>
+</head>
+<body><div style="width: 510px; margin: 0 auto;">
+	URL to camera.php:<br />
+	<input type="text" id="server" value="http://localhost/camera.php" /><br /><br />
+	Security key (see configuration of camera.php):<br />
+	<input type="text" id="key" /><br /><br />
+	RTSP URL:<br />
+	<input type="text" id="rtsp" /><br /><br />
+	RTSP URL, sub (second) stream:<br />
+	<input type="text" id="rtsp2" /><br /><br />
+	<input type="button" id="gen" value="Generate" onclick="gen()" /><br /><br /><br />
+
+	Generated link to video:<br />
+	<input type="text" id="result" /><br /><br />
+	<a href="javascript:;" onclick="test()">Test!</a><br /><br />
+	Generated link to snapshot:<br />
+	<input type="text" id="result_snapshot" /><br /><br />
+	<a href="javascript:;" onclick="test_snapshot()">Test!</a><br /><br />
+	Generated link to full-size snapshot:<br />
+	<input type="text" id="result_full_snapshot" /><br /><br />
+	<a href="javascript:;" onclick="test_full_snapshot()">Test!</a><br /><br />
+	Generated link to MJPEG video:<br />
+	<input type="text" id="result_mjpeg" /><br /><br />
+	<a href="javascript:;" onclick="test_mjpeg()">Test!</a><br /><br /><br />
+	
+	<script>
+		var s = document.getElementById("server");
+		var l1 = document.getElementById("rtsp");
+		var l2 = document.getElementById("rtsp2");
+		var k = document.getElementById("key");
+		var r = document.getElementById("result");
+		var rs = document.getElementById("result_snapshot");
+		var fs = document.getElementById("result_full_snapshot");
+		var mj = document.getElementById("result_mjpeg");
+			
+		function gen()
+		{
+			r.value = s.value
+				+ "?a=" + encodeURIComponent(btoa(l1.value)) 
+				+ "&b=" + encodeURIComponent(k.value) 
+			if (l2.value != "")	r.value	+= "&c=" + encodeURIComponent(btoa(l2.value));
+			rs.value = r.value + "&get=jpeg";
+			fs.value = r.value + "&get=jpeg-hq";
+			mj.value = r.value + "&get=mjpeg";
+		}
+		
+		function test()
+		{
+			window.open(r.value, '_blank');
+		}
+		
+		function test_snapshot()
+		{
+			window.open(rs.value, '_blank');
+		}
+		
+		function test_full_snapshot()
+		{
+			window.open(fs.value, '_blank');
+		}
+		
+		function test_mjpeg()
+		{
+			window.open(mj.value, '_blank');
+		}
+	</script>
+</div></body>
+</html>
+
