@@ -12,6 +12,7 @@ Installation and usage:
 6. Generate links using the "linkgen_en.html" tool (open it in a browser). Place links on the pages of your broadcasting site.
 
 RTSP links can be found in the camera documentation. You can also do this through the third-party utility named "Onvif Device Manager".
+If your browser cannot play the video, then disable H.265 and H.264+ in the camera settings. Browsers only support H.264 (January 2022).
 
 ---
 
@@ -34,6 +35,8 @@ RTSP links can be found in the camera documentation. You can also do this throug
 Название и RTSP-ссылки подставляете свои. Если нет ссылки на второй поток, то дублируете ссылку основного потока.
 
 По поводу безопасности. В принципе, если сервис будет непубличным, для чего и задумывался скрипт, то всё нормально. В противном случае, любой кто «подсмотрит» ссылку на camera.php, может вытащить исходную RTSP-ссылку, пароль на камеру (он прописывается в RTSP-ссылке), и сам секретный ключ $key. Пароль на камеру дает доступ к её админке, если вы пренебрегли созданием отдельной учетной записи на этой камере специально для RTSP. Секретный же ключ даст возможность через ваш сервер «крутить» сторонние камеры. Поэтому, данный скрипт только для частного доступа. Я мог бы реализовать шифрование параметров, но… при размещении в публичный доступ ввиду отсутствия кэширования видеоряда интернет-канал быстро «забьется», как и ресурсы на сервере.
+
+Внимание - убедитесь, что в камере выставлен формат кодирования видео H.264! Более новый H.265 не поддерживается большинством браузеров (на январь 2022 года). Также следует выключить опцию H.264+ в настройках камеры.
 
 Подробности в статье https://habr.com/ru/post/545888/
 
