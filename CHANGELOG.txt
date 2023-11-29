@@ -1,0 +1,15 @@
+1.2
+------
+- Added additional configuration options:
+ffmpeg_path, timeout, rtsp_transport.
+- Added support for FFMpeg 4.0+ (timeout/stimeout fix, mpjpeg boundary fix).
+- Minor improvements.
+
+1.1
+------
+- Added link generation tool.
+- Improved main script.
+
+1.0
+------
+Initial release.

@@ -1,0 +1,12 @@
+Установка:
+1. Скопировать папку "img" в корень сайта (www root).
+2. В ModX создать пустой плагин и вставить в поле кода текст из файла plugin.php.
+3. На той же странице создания нового плагина в разделе "Системные события" поставить галку напротив OnWebPagePrerender.
+4. Отредактируйте в тексте плагина в блоке "Конфигурация" необходимые параметры (как минимум первые два нужно поменять).
+
+
+Installation:
+1. Copy the "img" folder to the root of the site (www root).
+2. In ModX, create an empty plugin and paste the text from the plugin.php file into the code field.
+3. On the same page (creating a new plugin), in the "System events" section check option "OnWebPagePrerender".
+4. Edit the necessary parameters in the plugin text in the "Configuration" block (at least the first two need to be changed).

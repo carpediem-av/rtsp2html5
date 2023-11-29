@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru_RU">
+<head>
+	<meta charset="utf-8" />
+	<style>
+		body { padding: 0px; margin: 50px; }
+		input { width: 500px; }
+		#gen { width: 508px; height: 38px; }
+	</style>
+</head>
+<body><div style="width: 510px; margin: 0 auto;">
+	URL на camera.php:<br />
+	<input type="text" id="server" value="http://localhost/camera.php" /><br /><br />
+	Ключ доступа:<br />
+	<input type="text" id="key" /><br /><br />
+	RTSP-ссылка:<br />
+	<input type="text" id="rtsp" /><br /><br />
+	RTSP-ссылка на второй поток:<br />
+	<input type="text" id="rtsp2" /><br /><br />
+	<input type="button" id="gen" value="Сгенерировать" onclick="gen()" /><br /><br /><br />
+
+	Сгенерированная ссылка на видео:<br />
+	<input type="text" id="result" /><br /><br />
+	<a href="javascript:;" onclick="test()">Проверить!</a><br /><br />
+	А также ссылка на снимок-превью:<br />
+	<input type="text" id="result_snapshot" /><br /><br />
+	<a href="javascript:;" onclick="test_snapshot()">Проверить!</a><br /><br />
+	Ссылка на полноразмерный снимок:<br />
+	<input type="text" id="result_full_snapshot" /><br /><br />
+	<a href="javascript:;" onclick="test_full_snapshot()">Проверить!</a><br /><br />
+	Ссылка на видео в формате MJPEG:<br />
+	<input type="text" id="result_mjpeg" /><br /><br />
+	<a href="javascript:;" onclick="test_mjpeg()">Проверить!</a><br /><br /><br />
+	
+	<script>
+		var s = document.getElementById("server");
+		var l1 = document.getElementById("rtsp");
+		var l2 = document.getElementById("rtsp2");
+		var k = document.getElementById("key");
+		var r = document.getElementById("result");
+		var rs = document.getElementById("result_snapshot");
+		var fs = document.getElementById("result_full_snapshot");
+		var mj = document.getElementById("result_mjpeg");
+			
+		function gen()
+		{
+			r.value = s.value
+				+ "?a=" + encodeURIComponent(btoa(l1.value)) 
+				+ "&b=" + encodeURIComponent(k.value) 
+			if (l2.value != "")	r.value	+= "&c=" + encodeURIComponent(btoa(l2.value));
+			rs.value = r.value + "&get=jpeg";
+			fs.value = r.value + "&get=jpeg-hq";
+			mj.value = r.value + "&get=mjpeg";
+		}
+		
+		function test()
+		{
+			window.open(r.value, '_blank');
+		}
+		
+		function test_snapshot()
+		{
+			window.open(rs.value, '_blank');
+		}
+		
+		function test_full_snapshot()
+		{
+			window.open(fs.value, '_blank');
+		}
+		
+		function test_mjpeg()
+		{
+			window.open(mj.value, '_blank');
+		}
+	</script>
+</div></body>
+</html>
+
